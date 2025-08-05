@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: dairyfortune-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./fortunes.db:/root/fortunes.db
+    environment:
+      - GIN_MODE=release

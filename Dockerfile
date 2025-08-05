@@ -10,6 +10,10 @@ RUN go mod download
 # Copy the rest of your source code
 COPY . .
 
+# REMOVE this if present
+# COPY fortunes.db .
+
+
 # Enable CGO and build for Linux
 ENV CGO_ENABLED=1
 ENV GOOS=linux
