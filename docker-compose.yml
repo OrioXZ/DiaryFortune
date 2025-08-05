@@ -10,3 +10,12 @@ services:
       - ./fortunes.db:/root/fortunes.db
     environment:
       - GIN_MODE=release
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7
+    container_name: dairyfortune-redis
+    ports:
+      - "6379:6379"

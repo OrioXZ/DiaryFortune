@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+	config.InitRedis() // initialize Redis connection
 	config.ConnectDatabase()
 	config.DB.AutoMigrate(
 		&models.Card{},

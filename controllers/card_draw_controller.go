@@ -12,15 +12,23 @@ import (
 )
 
 func DrawCard(c *gin.Context) {
-	// 1. Get username from query or body
 	username := c.Query("username")
-
 	if username == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
 		return
 	}
 
-	// 2. Find or create users
+	// 🔍 1. Try Redis cache first
+	val, err := config.Rdb.Get(config.Ctx, "draw:"+username).Result()
+	if err == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"card":   val,
+			"source": "cache",
+		})
+		return
+	}
+
+	// 🔁 2. Proceed to DB logic
 	user := models.User{Username: username}
 	if err := config.DB.Where("username = ?", username).FirstOrCreate(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find/create user"})
@@ -28,18 +36,23 @@ func DrawCard(c *gin.Context) {
 	}
 
 	// 3. Check if already drawn today
-	var existingDraw models.CardDraw
 	today := time.Now().Truncate(24 * time.Hour)
-	err := config.DB.
+	var existingDraw models.CardDraw
+	err = config.DB.
 		Preload("User").
 		Preload("Card").
 		Where("user_id = ? AND date = ?", user.ID, today).
 		First(&existingDraw).Error
 
 	if err == nil {
+		// ✅ Cache it now for next time
+		cacheValue := existingDraw.Card.Name // or marshal full card as JSON
+		_ = config.Rdb.Set(config.Ctx, "draw:"+username, cacheValue, 0).Err()
+
 		c.JSON(http.StatusOK, gin.H{
 			"message": "You already drew a card today",
 			"result":  existingDraw,
+			"source":  "fresh-db",
 		})
 		return
 	}
@@ -66,9 +79,14 @@ func DrawCard(c *gin.Context) {
 		return
 	}
 
+	// ✅ Cache the drawn card for next time
+	cacheValue := card.Name // or marshal as JSON for full card
+	_ = config.Rdb.Set(config.Ctx, "draw:"+username, cacheValue, 0).Err()
+
 	// 7. Return result
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Card drawn!",
 		"card":    card,
+		"source":  "fresh-db",
 	})
 }
