@@ -1,6 +1,7 @@
 package config
 
 import (
+	"dairyfortune/models"
 	"fmt"
 
 	"gorm.io/driver/sqlite"
@@ -17,4 +18,21 @@ func ConnectDatabase() {
 
 	fmt.Println("✅ Connected to database")
 	DB = database
+}
+
+func InitTestDB() {
+	var err error
+	DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		panic("Failed to connect to test SQLite DB")
+	}
+
+	// Auto-migrate your models here
+	DB.AutoMigrate(
+		&models.User{},
+		&models.Card{},
+		&models.CardDraw{},
+		&models.Achievement{},
+	)
+
 }
