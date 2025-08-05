@@ -103,3 +103,4 @@ Thumbs.db
 *.coverprofile
 *.cover.out
 coverage/
+fortunes.db
