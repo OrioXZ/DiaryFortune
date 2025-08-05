@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"math/rand"
 	"net/http"
 	"time"
@@ -21,11 +22,16 @@ func DrawCard(c *gin.Context) {
 	// 🔍 1. Try Redis cache first
 	val, err := config.Rdb.Get(config.Ctx, "draw:"+username).Result()
 	if err == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"card":   val,
-			"source": "cache",
-		})
-		return
+		var cachedCard models.Card
+		if jsonErr := json.Unmarshal([]byte(val), &cachedCard); jsonErr == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"message": "You already drew a card today",
+				"card":    cachedCard,
+				"source":  "cache",
+			})
+			return
+		}
+		// If unmarshal fails, fallback to DB logic
 	}
 
 	// 🔁 2. Proceed to DB logic
@@ -36,8 +42,8 @@ func DrawCard(c *gin.Context) {
 	}
 
 	// 3. Check if already drawn today
-	today := time.Now().Truncate(24 * time.Hour)
 	var existingDraw models.CardDraw
+	today := time.Now().Truncate(24 * time.Hour)
 	err = config.DB.
 		Preload("User").
 		Preload("Card").
@@ -45,9 +51,9 @@ func DrawCard(c *gin.Context) {
 		First(&existingDraw).Error
 
 	if err == nil {
-		// ✅ Cache it now for next time
-		cacheValue := existingDraw.Card.Name // or marshal full card as JSON
-		_ = config.Rdb.Set(config.Ctx, "draw:"+username, cacheValue, 0).Err()
+		// ✅ Cache the existing draw for next time
+		jsonBytes, _ := json.Marshal(existingDraw.Card)
+		_ = config.Rdb.Set(config.Ctx, "draw:"+username, string(jsonBytes), 24*time.Hour).Err()
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "You already drew a card today",
@@ -79,9 +85,9 @@ func DrawCard(c *gin.Context) {
 		return
 	}
 
-	// ✅ Cache the drawn card for next time
-	cacheValue := card.Name // or marshal as JSON for full card
-	_ = config.Rdb.Set(config.Ctx, "draw:"+username, cacheValue, 0).Err()
+	// ✅ Cache the new draw
+	jsonBytes, _ := json.Marshal(card)
+	_ = config.Rdb.Set(config.Ctx, "draw:"+username, string(jsonBytes), 24*time.Hour).Err()
 
 	// 7. Return result
 	c.JSON(http.StatusOK, gin.H{
